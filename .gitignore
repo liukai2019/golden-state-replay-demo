@@ -1,0 +1,7 @@
+/build/
+/cmake-build-*/
+*.generated.gsr
+__pycache__/
+*.pyc
+.idea/
+.vscode/

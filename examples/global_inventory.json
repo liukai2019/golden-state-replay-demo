@@ -1,0 +1,18 @@
+{
+  "generated_from": "compile_commands.json",
+  "namespace_filter": "call_demo",
+  "globals": [
+    {
+      "qualified_name": "call_demo::g_service_ready",
+      "type": "bool"
+    },
+    {
+      "qualified_name": "call_demo::g_call",
+      "type": "call_demo::CallSession *"
+    },
+    {
+      "qualified_name": "call_demo::g_active_leg",
+      "type": "call_demo::MediaLeg *"
+    }
+  ]
+}
