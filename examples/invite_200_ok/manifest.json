@@ -1,0 +1,12 @@
+{
+  "format": "golden-state-replay",
+  "version": 2,
+  "scenario": "invite_200_ok",
+  "target": "ProcessSipCallEvent",
+  "capture_point": "function_entry",
+  "build_id": "public-demo-cxx17",
+  "type_fingerprint": "call-demo-typed-codec-v2",
+  "pointer_size": 8,
+  "endianness": "little",
+  "data_classification": "synthetic"
+}

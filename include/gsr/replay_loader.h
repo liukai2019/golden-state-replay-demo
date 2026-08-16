@@ -1,12 +1,13 @@
 #pragma once
 
 #include <cstdint>
-#include <iosfwd>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "gsr/demo_domain.h"
 
 namespace gsr {
 
@@ -20,19 +21,31 @@ struct ExpectedCall {
   std::int32_t argument = 0;
 };
 
+struct ReplayedCallArguments {
+  call_demo::SipRuntime* sip_ptr = nullptr;
+  call_demo::RegistrationService* service_ptr = nullptr;
+  call_demo::SipHandle h_ua = nullptr;
+  call_demo::SipHandle h_dialog = nullptr;
+  std::int32_t event = 0;
+  call_demo::UaAppEvent* ua_event_ptr = nullptr;
+  call_demo::AppEvent* event_ptr = nullptr;
+};
+
 class ReplayContext {
  public:
-  static std::unique_ptr<ReplayContext> Load(std::istream& input);
-  static std::unique_ptr<ReplayContext> LoadFile(const std::string& path);
+  static std::unique_ptr<ReplayContext> LoadBundle(
+      const std::string& directory);
 
   ~ReplayContext();
   ReplayContext(const ReplayContext&) = delete;
   ReplayContext& operator=(const ReplayContext&) = delete;
 
-  const std::unordered_map<std::string, std::string>& metadata() const;
+  const ReplayedCallArguments& arguments() const;
+  const std::unordered_map<std::string, std::string>& manifest() const;
   const std::vector<ExpectedCall>& expected_calls() const;
 
-  // Evaluates the post-action values declared by `expect` records.
+  // Compares only fields selected by oracle records after the real function
+  // has run. Unselected state is deliberately ignored.
   bool OracleMatches(std::string* mismatch) const;
 
  private:

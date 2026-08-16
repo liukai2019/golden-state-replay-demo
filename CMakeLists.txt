@@ -43,13 +43,15 @@ if(BUILD_TESTING)
   add_executable(gsr_gtest tests/golden_state_replay_test.cpp)
   target_link_libraries(gsr_gtest PRIVATE gsr_demo GTest::gtest_main)
   target_compile_definitions(
-    gsr_gtest PRIVATE GSR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+    gsr_gtest PRIVATE
+      GSR_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+      GSR_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}"
   )
   include(GoogleTest)
   gtest_discover_tests(gsr_gtest)
 
   add_test(
     NAME gsr_smoke
-    COMMAND gsr_smoke ${CMAKE_CURRENT_SOURCE_DIR}/examples/connected_call.gsr
+    COMMAND gsr_smoke ${CMAKE_CURRENT_SOURCE_DIR}/examples/invite_200_ok
   )
 endif()

@@ -1,6 +1,6 @@
 /build/
 /cmake-build-*/
-*.generated.gsr
+*.generated/
 __pycache__/
 *.pyc
 .idea/

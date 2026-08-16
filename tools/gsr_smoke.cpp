@@ -8,45 +8,47 @@
 namespace {
 
 void Require(bool condition, const std::string& message) {
-  if (!condition) {
-    throw std::runtime_error(message);
-  }
+  if (!condition) throw std::runtime_error(message);
 }
 
 }  // namespace
 
 int main(int argc, char** argv) {
-  const std::string fixture =
-      argc > 1 ? argv[1] : "examples/connected_call.gsr";
+  const std::string bundle =
+      argc > 1 ? argv[1] : "examples/invite_200_ok";
   try {
-    auto replay = gsr::ReplayContext::LoadFile(fixture);
+    auto replay = gsr::ReplayContext::LoadBundle(bundle);
+    const auto& args = replay->arguments();
 
-    Require(call_demo::g_service_ready, "scalar global was not restored");
-    Require(call_demo::g_call != nullptr, "g_call was not bound");
-    Require(call_demo::g_active_leg != nullptr, "g_active_leg was not bound");
-    Require(call_demo::g_call->active_leg == call_demo::g_active_leg,
-            "global alias was not preserved");
-    Require(call_demo::g_call->peer->owner == call_demo::g_call,
-            "peer back-pointer cycle was not preserved");
-    Require(call_demo::g_active_leg->sibling->sibling ==
-                call_demo::g_active_leg,
-            "media-leg cycle/interior pointers were not preserved");
-    Require(replay->expected_calls().size() == 1,
-            "expected call transcript was not loaded");
+    Require(args.service_ptr == &args.sip_ptr->service,
+            "embedded service identity was not restored");
+    auto* ua = static_cast<call_demo::UaContext*>(args.h_ua);
+    auto* dialog = static_cast<call_demo::Dialog*>(args.h_dialog);
+    Require(args.sip_ptr->primary_ua == ua,
+            "void handle alias was not restored");
+    Require(ua->dialogs.head == &dialog->link,
+            "intrusive-list subobject edge was not restored");
+    Require(args.event_ptr->correlation_id == 73 &&
+                args.event_ptr->call.to[0] == '\0',
+            "in/out entry state was not restored");
 
-    call_demo::RecordingPlatformApi platform;
-    Require(call_demo::HandleRemoteHold(platform) ==
+    call_demo::RecordingExternalApi external;
+    call_demo::SetExternalApi(&external);
+    Require(call_demo::ProcessSipCallEvent(
+                args.sip_ptr, args.service_ptr, args.h_ua, args.h_dialog,
+                args.event, args.ua_event_ptr, args.event_ptr) ==
                 call_demo::HandlerResult::kOk,
-            "handler did not accept replayed state");
-    Require(platform.stopped_timer_tokens.size() == 1 &&
-                platform.stopped_timer_tokens.front() ==
-                    replay->expected_calls().front().argument,
-            "platform interaction did not match transcript");
+            "real handler rejected replayed state");
+    Require(replay->expected_calls().size() == 1 &&
+                external.confirmed_dialog_ids.size() == 1 &&
+                replay->expected_calls().front().argument ==
+                    external.confirmed_dialog_ids.front(),
+            "external spy transcript did not match");
 
     std::string mismatch;
     Require(replay->OracleMatches(&mismatch), "oracle mismatch: " + mismatch);
-    std::cout << "PASS: replayed " << replay->metadata().at("scenario")
-              << ", preserved aliases/cycles, matched platform transcript and oracle\n";
+    std::cout << "PASS: replayed " << replay->manifest().at("scenario")
+              << ", preserved subobjects/handles/list edges, matched spy and oracle\n";
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "FAIL: " << error.what() << '\n';

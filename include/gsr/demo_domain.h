@@ -5,67 +5,110 @@
 
 namespace call_demo {
 
-enum class CallState : std::int32_t {
-  kIdle = 0,
-  kConnected = 1,
-  kRemoteHold = 2,
+// The public demo deliberately uses generic names. The shapes are close enough
+// to a C-style SIP stack to exercise the replay problems without publishing
+// product-specific identifiers or private layouts.
+using SipHandle = void*;
+
+enum class UaEventType : std::int32_t {
+  kRequest = 1,
+  kResponse = 2,
 };
 
-struct CallSession;
-
-struct Peer {
-  char uri[64]{};
-  CallSession* owner = nullptr;
+struct ListEntry {
+  ListEntry* previous = nullptr;
+  ListEntry* next = nullptr;
 };
 
-struct MediaLeg {
-  std::int32_t id = 0;
-  bool active = false;
-  CallSession* owner = nullptr;
-  MediaLeg* sibling = nullptr;
+struct DialogList {
+  ListEntry* head = nullptr;
+  ListEntry* tail = nullptr;
 };
 
-// A process-local/platform resource. Its address is never serialized; an adapter
-// reconstructs it from the stable token stored in the snapshot.
-struct TimerHandle {
-  std::int32_t token = 0;
+struct RegistrationService {
+  bool registered = false;
+  char public_user_id[96]{};
 };
 
-struct CallSession {
-  std::int32_t call_id = 0;
-  CallState state = CallState::kIdle;
-  Peer* peer = nullptr;
-  MediaLeg* active_leg = nullptr;
-  TimerHandle* refresh_timer = nullptr;
+struct Dialog {
+  // Intrusive list node: UaContext::dialogs points to this subobject, not to
+  // the address of Dialog itself.
+  ListEntry link;
+  std::int32_t dialog_id = 0;
+  bool confirmed = false;
+  char remote_uri[128]{};
 };
 
-// Demo equivalents of target-module globals discovered from compile_commands.json.
-extern bool g_service_ready;
-extern CallSession* g_call;
-extern MediaLeg* g_active_leg;
+struct UaContext {
+  ListEntry link;
+  std::uint32_t task_id = 0;
+  DialogList dialogs;
+  char scratch[256]{};
+};
 
-class PlatformApi {
+struct SipRuntime {
+  std::int32_t config_epoch = 0;
+  RegistrationService service;
+  UaContext* primary_ua = nullptr;
+};
+
+struct UaAppEvent {
+  struct Header {
+    SipHandle ua = nullptr;
+    SipHandle owner = nullptr;
+    UaEventType type = UaEventType::kRequest;
+  } header;
+  char remote_uri[128]{};
+  char call_id[64]{};
+};
+
+// This is an in/out parameter. The caller may pre-populate correlation_id and
+// other fields; the function under test fills call.to for this scenario.
+struct AppEvent {
+  std::int32_t correlation_id = 0;
+  struct {
+    char to[128]{};
+  } call;
+};
+
+// Demo equivalents of selected module globals. A real integration uses a
+// Clang-generated inventory intersected with an explicit capture policy.
+extern bool g_feature_enabled;
+extern SipRuntime* g_runtime;
+
+class ExternalApi {
  public:
-  virtual ~PlatformApi() = default;
-  virtual bool StopTimer(std::int32_t token) = 0;
+  virtual ~ExternalApi() = default;
+  virtual void NotifyDialogConfirmed(std::int32_t dialog_id) = 0;
 };
+
+void SetExternalApi(ExternalApi* api);
 
 enum class HandlerResult {
   kOk,
   kMissingState,
-  kInvalidState,
-  kPlatformError,
+  kWrongEvent,
+  kInvalidRelationship,
+  kInvalidText,
+  kExternalUnavailable,
 };
 
-HandlerResult HandleRemoteHold(PlatformApi& platform);
+// Sanitized equivalent of a large production call-event handler. Upstream
+// dialog/transaction processing already classified this response as belonging
+// to INVITE; this entry point only receives response category + status code.
+HandlerResult ProcessSipCallEvent(SipRuntime* sip_ptr,
+                                  RegistrationService* service_ptr,
+                                  SipHandle h_ua, SipHandle h_dialog,
+                                  std::int32_t event,
+                                  UaAppEvent* ua_event_ptr,
+                                  AppEvent* event_ptr);
+
 void ResetGlobals();
 
-class RecordingPlatformApi final : public PlatformApi {
+class RecordingExternalApi final : public ExternalApi {
  public:
-  bool StopTimer(std::int32_t token) override;
-
-  bool stop_timer_result = true;
-  std::vector<std::int32_t> stopped_timer_tokens;
+  void NotifyDialogConfirmed(std::int32_t dialog_id) override;
+  std::vector<std::int32_t> confirmed_dialog_ids;
 };
 
 }  // namespace call_demo

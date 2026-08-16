@@ -17,5 +17,5 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: Capture and replay generated state
         run: |
-          ./build/gsr_capture_demo /tmp/connected_call.generated.gsr
-          ./build/gsr_smoke /tmp/connected_call.generated.gsr
+          ./build/gsr_capture_demo /tmp/invite_200_ok.generated
+          ./build/gsr_smoke /tmp/invite_200_ok.generated
