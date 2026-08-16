@@ -1,0 +1,40 @@
+{
+  "target": "call_demo::ProcessSipCallEvent",
+  "capture_point": "function_entry",
+  "roots": [
+    "arg.sip_ptr",
+    "arg.service_ptr",
+    "arg.h_ua",
+    "arg.h_dialog",
+    "arg.ua_event_ptr",
+    "arg.event_ptr",
+    "call_demo::g_feature_enabled",
+    "call_demo::g_runtime"
+  ],
+  "rules": [
+    {
+      "type": "call_demo::SipRuntime",
+      "field": "service",
+      "action": "embedded"
+    },
+    {
+      "type": "call_demo::UaContext",
+      "field": "dialogs",
+      "action": "traverse_intrusive_list"
+    },
+    {
+      "type_pattern": "*Socket*|*Lock*|*Thread*|*Timer*",
+      "action": "stub_or_adapter"
+    },
+    {
+      "type_pattern": "*DebugCache*|*Statistics*",
+      "action": "ignore"
+    }
+  ],
+  "limits": {
+    "max_pointer_depth": 8,
+    "max_objects": 5000,
+    "max_bytes": 16777216
+  },
+  "unknown_pointer_action": "reject"
+}

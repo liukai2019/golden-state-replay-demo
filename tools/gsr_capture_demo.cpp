@@ -1,44 +1,77 @@
 #include <cstring>
-#include <fstream>
 #include <iostream>
-#include <memory>
 #include <stdexcept>
 #include <string>
 
 #include "gsr/demo_domain.h"
 #include "gsr/demo_exporter.h"
 
+namespace {
+
+template <std::size_t N>
+void SetText(char (&destination)[N], const char* source) {
+  const std::size_t length = std::strlen(source);
+  if (length >= N) throw std::runtime_error("demo text is too long");
+  std::memcpy(destination, source, length + 1);
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
-  const std::string output_path =
-      argc > 1 ? argv[1] : "connected_call.generated.gsr";
+  const std::string output_directory =
+      argc > 1 ? argv[1] : "invite_200_ok.generated";
   try {
-    auto call = std::make_unique<call_demo::CallSession>();
-    auto peer = std::make_unique<call_demo::Peer>();
-    auto legs = std::make_unique<call_demo::MediaLeg[]>(2);
-    auto timer = std::make_unique<call_demo::TimerHandle>();
+    call_demo::SipRuntime sip;
+    call_demo::UaContext ua;
+    call_demo::Dialog dialog;
+    call_demo::UaAppEvent ua_event;
+    call_demo::AppEvent app_event;
+    call_demo::RecordingExternalApi external;
 
-    call->call_id = 42;
-    call->state = call_demo::CallState::kConnected;
-    call->peer = peer.get();
-    call->active_leg = &legs[1];
-    call->refresh_timer = timer.get();
-    std::strcpy(peer->uri, "sip:alice@example.test");
-    peer->owner = call.get();
-    legs[0] = {10, false, call.get(), &legs[1]};
-    legs[1] = {20, true, call.get(), &legs[0]};
-    timer->token = 9001;
+    sip.config_epoch = 7;
+    sip.service.registered = true;
+    SetText(sip.service.public_user_id, "sip:user-001@example.test");
+    sip.primary_ua = &ua;
+    ua.task_id = 17;
+    SetText(ua.scratch, "synthetic-transaction-state");
+    ua.dialogs.head = &dialog.link;
+    ua.dialogs.tail = &dialog.link;
+    dialog.dialog_id = 42;
+    dialog.confirmed = false;
+    SetText(dialog.remote_uri, "sip:peer-001@example.test");
 
-    call_demo::g_service_ready = true;
-    call_demo::g_call = call.get();
-    call_demo::g_active_leg = &legs[1];
+    ua_event.header.ua = &ua;
+    ua_event.header.owner = &dialog;
+    ua_event.header.type = call_demo::UaEventType::kResponse;
+    SetText(ua_event.remote_uri, "sip:peer-001@example.test");
+    SetText(ua_event.call_id, "synthetic-call-001");
+    app_event.correlation_id = 73;  // proves this is an in/out object
+    app_event.call.to[0] = '\0';
 
-    std::ofstream output(output_path);
-    if (!output) {
-      throw std::runtime_error("cannot open output file: " + output_path);
+    call_demo::g_feature_enabled = true;
+    call_demo::g_runtime = &sip;
+    call_demo::SetExternalApi(&external);
+
+    const gsr::CapturedCallArguments arguments{
+        &sip, &sip.service, &ua, &dialog, 200, &ua_event, &app_event};
+
+    // Equivalent to the trampoline's CaptureBefore hook.
+    gsr::ExportEntryState(output_directory, arguments);
+
+    const auto result = call_demo::ProcessSipCallEvent(
+        arguments.sip_ptr, arguments.service_ptr, arguments.h_ua,
+        arguments.h_dialog, arguments.event, arguments.ua_event_ptr,
+        arguments.event_ptr);
+    if (result != call_demo::HandlerResult::kOk) {
+      throw std::runtime_error("synthetic integration call failed");
     }
-    gsr::ExportDemoState(output, {call.get(), peer.get(), legs.get(), 2});
+
+    // Equivalent to the optional CaptureAfter hook.
+    gsr::AppendExpectedResult(output_directory, app_event,
+                              external.confirmed_dialog_ids);
     call_demo::ResetGlobals();
-    std::cout << "Wrote GSR/1 fixture to " << output_path << '\n';
+    std::cout << "Wrote sanitized replay bundle to " << output_directory
+              << '\n';
     return 0;
   } catch (const std::exception& error) {
     call_demo::ResetGlobals();
